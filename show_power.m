@@ -6,7 +6,7 @@ power=log(power);
 title_string='Log of ';
 end
 figure;
-scatter3(gridLF.pos(gridLF.inside,1),gridLF.pos(gridLF.inside,2),gridLF.pos(gridLF.inside,3),100,power,'filled')
+scatter3(gridLF.pos(gridLF.inside,1),gridLF.pos(gridLF.inside,2),gridLF.pos(gridLF.inside,3),50,power,'filled')
 hold all;
 
 gridLF.pos(gridLF.inside,:);

@@ -76,7 +76,7 @@ show_grid_and_ground_truth(gridLF,source_idx);
 spm_eeg_plotScalpData(L(:,source_idx),D.coor2D,D.chanlabels);
 
 % Simulate the data
-[Y,X_GT]=simulate_data(L,source_idx);
+[Y,X_GT,fs,duration,fsig]=simulate_data(L,source_idx);
 
 % Put data into D object
 Dnew = clone(D, 'ryan', [D.nchannels 300 50]);

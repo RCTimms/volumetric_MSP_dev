@@ -1,4 +1,4 @@
-function [Y,x]=simulate_data(L,source_idx);
+function [Y,x,fs,duration,fsig]=simulate_data(L,source_idx);
 N_trials=50;
 fs=300;
 duration=1;
