@@ -1,10 +1,11 @@
-function [Y,x,fs,duration,fsig]=simulate_data(L,source_idx);
-N_trials=50;
-fs=300;
-duration=1;
-fsig=20;
+function [Y,x,fs,duration,fsig]=simulate_data(L,source_idx,options);
+try N_trials=options.N_trials; catch, N_trials=50; end
+try fs=options.fs; catch, fs=300; end
+try duration=options.duration; catch,duration=1; end
+try fsig=options.fsig; catch, fsig=20; end
+try SNRdB=options.SNRdB; catch, SNRdB=0; end
 t=linspace(0,N_trials*duration,duration*fs*N_trials);
-SNRdB=0;
+
 
 % Just populate a single vertex
 x=sin(2*pi*fsig*t);
