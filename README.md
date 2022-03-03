@@ -24,7 +24,7 @@ The function works by providing the volumetric MSP code with both an SPM D objec
 ## Points of note
 
 
-## Script overview
+## Example Scripts
 There are some scripts provided in the repository designed to demonstrate the function working, alongside highlighting some of the bonus functionality provided. These are called example_N_volumetric_MSPs.m. A brief description of these scripts are provided here:
 
 1. A very basic volumetric MSP example. The source is superficial, the SNR is high and we only reconstruct to one lead field orientation. This is an "easy" source localisation problem.
