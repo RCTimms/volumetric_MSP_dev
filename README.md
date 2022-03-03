@@ -22,6 +22,9 @@ The function works by providing the volumetric MSP code with both an SPM D objec
    - the unravelled lead field matrix [N_channels x Nsources*3]. This can be obtained by using the unravel_leadfield function.
 
 ## Points of note
+- The default in this code is to have one prior per voxel and per orientation, not an amalgamation of voxels into "patches". For instance, if there are 1,000 grid points this would lead to 3 x 1000 = 3,000 priors
+
+- The defualt is to not apply any temporal filtering to the data in this version of the code.
 
 
 ## Example Scripts
