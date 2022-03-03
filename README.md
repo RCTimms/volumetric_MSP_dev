@@ -3,6 +3,11 @@ Because who likes a mesh?
 
 **Note that this is development only code and has not yet been tried and tested in any anger.**
 
+Based off of the following papers:
+>Friston, K., Harrison, L., Daunizeau, J., Kiebel, S., Phillips, C., Trujillo-Barreto, N., ... & Mattout, J. (2008). Multiple sparse priors for the M/EEG inverse problem. NeuroImage, 39(3), 1104-1120.
+
+>Strobbe, G., van Mierlo, P., De Vos, M., Mijović, B., Hallez, H., Van Huffel, S., ... & Vandenberghe, S. (2014). Multiple sparse volumetric priors for distributed EEG source reconstruction. NeuroImage, 100, 715-724.
+
 ## Requirements
 - SPM12
 - MNI aligned "standard" sourcemodels shipped with FieldTrip. These can be downloaded from here: https://github.com/fieldtrip/fieldtrip/tree/master/template/sourcemodel 
