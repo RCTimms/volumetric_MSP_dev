@@ -40,6 +40,8 @@ There are some scripts provided in the repository designed to demonstrate the fu
 
 5. Same as example 3, but now we reconstruct to a 6mm grid. This makes the inference more computationally demanding, as there are more priors created in the MSP algorithm. We also demonstrate the collapsing of the reconstructed timeseries into one component from three orthogonal timeseries.
 
+## Example Results
+
 ## Development ideas
 1. Clump voxels together to form patches to reduce the computational burden/number of patches
 2. Add support to export images of activity to niftis
@@ -47,3 +49,4 @@ There are some scripts provided in the repository designed to demonstrate the fu
 4. Delete voxels from outside of the volume conductor model
 5. Check with a real OPM array. Maybe we need to do a coregistration...
 6. Add atlas support to reconstruct to ROIs (basically pure FieldTrip stuff).
+7. Add example results
