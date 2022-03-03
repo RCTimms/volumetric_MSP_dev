@@ -43,6 +43,7 @@ There are some scripts provided in the repository designed to demonstrate the fu
 ## Development ideas
 1. Clump voxels together to form patches to reduce the computational burden/number of patches
 2. Add support to export images of activity to niftis
-3. Collapse timeseries over x, y and z into a single dimension (vector to scalar source solution).
+3. ~Collapse timeseries over x, y and z into a single dimension (vector to scalar source solution).~
 4. Delete voxels from outside of the volume conductor model
 5. Check with a real OPM array. Maybe we need to do a coregistration...
+6. Add atlas support to reconstruct to ROIs (basically pure FieldTrip stuff).
