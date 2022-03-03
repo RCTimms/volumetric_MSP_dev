@@ -1,17 +1,25 @@
 function [D] = spm_eeg_invert_classic_volumetric(D,val,L)
 %% Volumetric multiple sparse priors
-%% A trimmed down version of the spm_eeg_invert() routine
-%% this version only handles single subject single modality data
-%% the removal of many scaling factors makes it easier to compare between forward models
-% ReML inversion of multiple forward models for EEG-MEG
-% FORMAT [D] = spm_eeg_invert_classic(D)
-% ReML estimation of regularisation hyperparameters using the
-% spatiotemporal hierarchy implicit in EEG/MEG data
+% This version only handles single subject single modality data the removal
+% of many scaling factors makes it easier to compare between forward models
+% 
+% Note also that this funtion performs a bit differently from the
+% spm_eeg_invert and spm_eeg_invert_classic functions. Namely:
+%
+% 1) No temporal filtering is carried out to the data by default
+% 2) By default, each lead field element has one associated prior (i.e. no
+%    "patches" or graph Laplacians are calculated).
+%
+% Ryan Timms, 2022.
 %
 % Requires:
-%           A volumetric [N_channels x 3*N_sources] lead field matrix, L
-%           An SPM object, D
-%           An inversion value, val 
+%           A lead field matrix, L. This is typically volumetric
+%           [N_channels x (3*)N_sources]. This function can handle both
+%           orientation specific and orientation agnostic lead fields
+%           An SPM object, D 
+%           An inversion value, val
+%
+% The usual SPM invert shenanigans applies:
 % D{i}.inv{val}.inverse:
 %
 %     inverse.modality - modality to use in case of multimodal datasets
@@ -71,6 +79,8 @@ function [D] = spm_eeg_invert_classic_volumetric(D,val,L)
 % No symmetric priors are used in this implementation (just single patches)
 % There is an option for a Beamforming prior : inversion type 'EBB'
 % also added new beamforming method- using GS rather than ARD- from Juan David Martinez Vargas 'EBBgs'
+
+
 
 
 
