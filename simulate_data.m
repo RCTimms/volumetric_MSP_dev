@@ -7,11 +7,15 @@ try SNRdB=options.SNRdB; catch, SNRdB=0; end
 t=linspace(0,N_trials*duration,duration*fs*N_trials);
 
 
-% Just populate a single vertex
+% Single source time series
 x=sin(2*pi*fsig*t);
 
 % Project
-Y=L(:,source_idx)*x;
+if numel(source_idx)==1; % Single voxel
+    Y=L(:,source_idx)*x;
+else % Multiple voxels
+    Y=L(:,source_idx)*repmat(x,numel(source_idx),1);
+end
 
 % Add noise
 allchanstd=std(Y');
