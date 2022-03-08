@@ -54,9 +54,10 @@ There are some scripts provided in the repository designed to demonstrate the fu
 ## Example Results
 
 ## Development ideas
-1. Clump voxels together to form patches to reduce the computational burden/number of patches
+1. Clump voxels together to form patches to reduce the computational burden/number of patches. This could be based off of an atlas
 2. Add support to export images of activity to niftis
 3. ~Collapse timeseries over x, y and z into a single dimension (vector to scalar source solution).~
 4. ~Check with a real OPM array. Maybe we need to do a coregistration...~
 5. ~Add atlas support to reconstruct to ROIs (basically pure FieldTrip stuff).~
 6. Add example result figures
+7. Add support for the specification of multiple noise covariance matrices
