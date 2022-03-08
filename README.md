@@ -19,7 +19,7 @@ The function works by providing the volumetric MSP code with both an SPM D objec
 
 1. Creation of SPM D object, **coregistration and forward model calculation are essential**.
 
-2. Creation of FieldTrip source model struct. Currently an MNI-aligned volumetric grid is loaded in from disk. An additional coregistration step may need to be thrown in here in the future.
+2. Creation of FieldTrip source model struct. Currently an MNI-aligned volumetric grid is loaded in from disk. 
 
 3. Call to spm_eeg_invert_classic_volumetric. This takes the arguments:
    - D (SPM data object from step 1)
@@ -45,13 +45,18 @@ There are some scripts provided in the repository designed to demonstrate the fu
 
 5. Same as example 3, but now we reconstruct to a 6mm grid. This makes the inference more computationally demanding, as there are more priors created in the MSP algorithm. We also demonstrate the collapsing of the reconstructed timeseries into one component from three orthogonal timeseries.
 
+6. Coming soon...
+
+7. Coming soon...
+
+8. This is a very comprehensive script (and hence is a little complicated). Starting with the high level details it: does a non-linear coreg of the MNI grid into the OPM helmet; shows how to deal with an MRI file which is in a non-standard space (e.g. MRI scanner space) and put this into a well-defined one (e.g. CTF MEG space); loads in an atlas; simulates a voxel timeseries in the left hippocampus and runs volumetric MSPs. We do this for just one of the lead field orientations (Y - chosen arbitrarily). The SNR is 0dB. We normalise the lead fields - feel free to try changing this and see what happens...  
+
 ## Example Results
 
 ## Development ideas
 1. Clump voxels together to form patches to reduce the computational burden/number of patches
 2. Add support to export images of activity to niftis
 3. ~Collapse timeseries over x, y and z into a single dimension (vector to scalar source solution).~
-4. Delete voxels from outside of the volume conductor model
-5. Check with a real OPM array. Maybe we need to do a coregistration...
-6. Add atlas support to reconstruct to ROIs (basically pure FieldTrip stuff).
-7. Add example results
+4. ~Check with a real OPM array. Maybe we need to do a coregistration...~
+5. ~Add atlas support to reconstruct to ROIs (basically pure FieldTrip stuff).~
+6. Add example result figures
