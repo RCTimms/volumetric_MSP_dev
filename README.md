@@ -47,9 +47,9 @@ There are some scripts provided in the repository designed to demonstrate the fu
 
 6. Coming soon...
 
-7. Coming soon...
+7. A more realistic example. We use a linear (affine) transform to map the MNI grid into the subject's OPM array. A volumetric grid is used. We simulate for one of the lead field axes. The SNR is very very high. **We normalise the lead field vectors - see what happens if we don't do this step**.
 
-8. This is a very comprehensive script (and hence is a little complicated). Starting with the high level details it: does a non-linear coreg of the MNI grid into the OPM helmet; shows how to deal with an MRI file which is in a non-standard space (e.g. MRI scanner space) and put this into a well-defined one (e.g. CTF MEG space); loads in an atlas; simulates a voxel timeseries in the left hippocampus and runs volumetric MSPs. We do this for just one of the lead field orientations (Y - chosen arbitrarily). The SNR is 0dB. We normalise the lead fields - feel free to try changing this and see what happens...  
+8. This is a very comprehensive script (and hence is a little complicated). Starting with the high level details it: does a non-linear coreg of the MNI grid into the OPM helmet; shows how to deal with an MRI file which is in a non-standard space (e.g. MRI scanner space) and put this into a well-defined one (e.g. CTF MEG space); loads in an atlas; simulates a voxel timeseries in the left hippocampus and runs volumetric MSPs. We do this for just one of the lead field orientations (Y - chosen arbitrarily). The SNR is 0dB. **We normalise the lead fields - feel free to try changing this and see what happens...  **
 
 ## Example Results
 
