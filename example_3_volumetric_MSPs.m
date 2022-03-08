@@ -62,7 +62,7 @@ gridLF = ft_prepare_leadfield(cfg);
 
 % Extract the leadfield
 L = gridLF.leadfield(gridLF.inside);
-
+%%
 % Unravel the leadfield 
 L=unravel_leadfield(L);
 
