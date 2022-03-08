@@ -14,6 +14,8 @@ Based off of the following papers:
 
 (and optionally the OPM repo if you want to change the number of sensors or array setup, etc.).
 
+If you would like a copy of the D object pertaining to the real data (for examples 7 and 8) then please email r.timms@ucl.ac.uk.
+
 ## User guide
 The function works by providing the volumetric MSP code with both an SPM D object and a source model struct from FieldTrip. The general work flow of the pipeline is as follows:
 
@@ -27,13 +29,13 @@ The function works by providing the volumetric MSP code with both an SPM D objec
    - the unravelled lead field matrix [N_channels x Nsources*3]. This can be obtained by using the unravel_leadfield function.
 
 ## Points of note
-- The default in this code is to have one prior per voxel and per orientation, not an amalgamation of voxels into "patches". For instance, if there are 1,000 grid points this would lead to 3 x 1000 = 3,000 priors
+- The default in this code is to have one prior per voxel and per orientation, not an amalgamation of voxels into "patches". For instance, if there are 1,000 grid points this would lead to 3 x 1000 = 3,000 priors.
 
 - The defualt is to not apply any temporal filtering to the data in this version of the code.
 
 
 ## Example Scripts
-There are some scripts provided in the repository designed to demonstrate the function working, alongside highlighting some of the bonus functionality provided. These are called example_N_volumetric_MSPs.m. A brief description of these scripts are provided here:
+There are some scripts provided in the repository designed to demonstrate the function working, alongside highlighting some of the bonus functionality provided. These are called example_N_volumetric_MSPs.m. A brief description of these scripts are provided here. Common to all datasets is the simulation of a single sine wave in the source space which is epoched into trials.
 
 1. A very basic volumetric MSP example. The source is superficial, the SNR is high and we only reconstruct to one lead field orientation. This is an "easy" source localisation problem.
 
