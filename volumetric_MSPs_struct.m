@@ -33,7 +33,7 @@ else
 end
 clear S 
 %%
-% F off to FieldTrip
+
 
 % Get the data object
 data=ftraw(D);

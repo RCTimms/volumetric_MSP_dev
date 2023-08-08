@@ -37,7 +37,7 @@ else
    D=spm_eeg_load('dev_MSPs.mat') 
 end
 clear S 
-
+%%
 % We need to borrow some FieldTrip functionality
 % Get the data object
 data=ftraw(D);
@@ -67,7 +67,10 @@ L=unravel_leadfield(L);
 
 % Start simple - just take the x component of the lead field
 L=L(:,1:3:end);
+%%
+D=spm_opm_attach_leadfield(data.grad.label,L,1,D);
 
+%%
 % Choose a source index, any source index
 source_idx=length(L);
 
@@ -82,12 +85,12 @@ spm_eeg_plotScalpData(L(:,source_idx),D.coor2D,D.chanlabels);
 Dnew = clone(D, 'ryan', [D.nchannels 300 50]);
 Dnew(:,:,:)=Y;
 Dnew.save;
-
+%%
 % Off to volumetric MSPs
 D=Dnew;
 D.inv{1}.inverse=[];D.inv{1}.inverse.type='GS';D.inv{1}.inverse.Han=0;
-Dout=spm_eeg_invert_classic_volumetric(D,1,L);
-
+Dout=spm_eeg_invert_classic_volumetric(D,1);
+%%
 % Show the results
 is_vector=0; % Is it a vector lead field?
 log_it=0; % Should we log the power map?
@@ -96,11 +99,11 @@ log_it=0; % Should we log the power map?
 % Show the power and the ground truth location
 show_power(X,gridLF,source_idx,log_it)
 
-% Show the reconstructed timeseries
+%% Show the reconstructed timeseries
 figure;
 t=linspace(0,duration,duration*fs);
 hold all
-plot(t,X(source_idx,:),'LineWidth',2);
+plot(t,X(source_idx),'LineWidth',2);
 plot(t,X_GT(1:fs),'Linewidth',2)
 xlabel('Time (s)');
 set(gca,'FontSize',16);
