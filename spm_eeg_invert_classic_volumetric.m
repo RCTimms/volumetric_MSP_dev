@@ -103,10 +103,16 @@ try     no_temporal_filter = inverse.no_temporal_filter; catch, no_temporal_filt
 try     complexind      = inverse.complexind;     catch, complexind      = [];           end
 
 %==========================================================================
-% Lead fields: Load and assign values to number of dipoles (Nd)
+% Account for bad channels: get the indices of good channels
+%==========================================================================
+Ic  = setdiff(D.indchantype(modalities), badchannels(D));
+
+%==========================================================================
+% Lead fields: Load and assign values to number of dipoles (Nd). Exclude
+% any bad channels at this stage.
 %==========================================================================
 fprintf('\nLoading or creating lead field matrix')
-[L,~] = spm_eeg_lgainmat(D);    % Generate/load lead field
+[L,~] = spm_eeg_lgainmat(D,[],D.chanlabels(Ic)); % Generate/load lead field
 Nd=size(L,2); % Number of sources in lead field matrix
 Np = Nd; % Number of priors
 
@@ -119,10 +125,6 @@ else
     Ip=ceil([1:Np]*Nd/Np);
 end
 
-%==========================================================================
-% Account for bad channels: get the indices of good channels
-%==========================================================================
-Ic  = setdiff(D.indchantype(modalities), badchannels(D));
 
 %==========================================================================
 % Spatial projectors: construct a spatial projector matrix, A, and apply
