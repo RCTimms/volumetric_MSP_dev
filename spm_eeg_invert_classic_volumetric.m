@@ -71,22 +71,12 @@ function [D] = spm_eeg_invert_classic_volumetric(D,val)
 % method- using GS rather than ARD- from Juan David Martinez Vargas 'EBBgs'
 %
 %==========================================================================
-% Check to see how many subjects are being fed to the function. This only
-% works for a single subject.
-Nl = length(D);
-if Nl>1
-    error('function only defined for a single subject');
-end
-
-% Check modalities - this function only works for single modality
-%--------------------------------------------------------------------------
-modalities = D.inv{val}.forward.modality;
-if size(modalities,1)>1
-    error('not defined for multiple modalities');
-end
-
 
 %==========================================================================
+% Check data: only single subject and single modality supported
+%==========================================================================
+modalities = check_subjects_and_modality(D, val);
+
 
 % D - SPM data structure
 %==========================================================================
@@ -96,43 +86,40 @@ elseif ~isfield(D, 'val')
     D.val = 1;
 end
 
-
 val=D.val;
 
 inverse   = D.inv{val}.inverse;
 
 
 %==========================================================================
-% Function inputs: assign defaults if arguments are missing
+% Check function arguments: assign defaults if necessary
 %==========================================================================
-try type = inverse.type;   catch, type = 'GS';     end
-try hpf  = inverse.hpf;    catch, hpf  = 256;      end 
-try lpf  = inverse.lpf;    catch, lpf  = 0;        end
-try sdv  = inverse.sdv;    catch, sdv  = 4;        end
-try Han  = inverse.Han;    catch, Han  = 1;        end
-try woi  = inverse.woi;    catch, woi  = [];       end
-try Nmax  = inverse.Nmax;  catch, Nmax  = 512;   end % max number of temporal modes
-try Nm   = inverse.Nm;     catch, Nm   = [];       end
-try Nt   = inverse.Nt;     catch, Nt   = [];       end %% fixed/requested number of temporal modes
-try Ip   = inverse.Ip;     catch, Ip   = [];       end
-try QE    = inverse.QE;     catch,  QE=1;          end         %  empty room noise measurement
-try Qe0   = inverse.Qe0;     catch, Qe0   = exp(-5);       end  %% set noise floor at 1/100th signal power i.e. assume amplitude SNR of 10
-try inverse.A;     catch, inverse.A   = [];       end %% orthogonal channel modes
-try no_temporal_filter=inverse.no_temporal_filter; catch, no_temporal_filter=1; end
-try complexind=inverse.complexind; catch, complexind=[]; end
-%==========================================================================
-% Function inputs
-%==========================================================================
+try     type            = inverse.type;           catch, type            = 'GS';         end
+try     hpf             = inverse.hpf;            catch, hpf             = 256;          end
+try     lpf             = inverse.lpf;            catch, lpf             = 0;            end
+try     sdv             = inverse.sdv;            catch, sdv             = 4;            end
+try     Han             = inverse.Han;            catch, Han             = 1;            end
+try     woi             = inverse.woi;            catch, woi             = [];           end
+try     Nmax            = inverse.Nmax;           catch, Nmax            = 512;          end % max number of temporal modes
+try     Nm              = inverse.Nm;             catch, Nm              = [];           end
+try     Nt              = inverse.Nt;             catch, Nt              = [];           end %% fixed/requested number of temporal modes
+try     Ip              = inverse.Ip;             catch, Ip              = [];           end
+try     QE              = inverse.QE;             catch, QE              = 1;            end % empty room noise measurement
+try     Qe0             = inverse.Qe0;            catch, Qe0             = exp(-5);      end %% set noise floor at 1/100th signal power i.e. assume amplitude SNR of 10
+try     inverse.A       = inverse.A;              catch, inverse.A       = [];           end %% orthogonal channel modes
+try     no_temporal_filter = inverse.no_temporal_filter; catch, no_temporal_filter = 1;   end
+try     complexind      = inverse.complexind;     catch, complexind      = [];           end
 
 
-
-% check lead fields and get number of dipoles (Nd) and channels (Nc)
 %==========================================================================
-fprintf('\nChecking leadfields')
+% Lead fields: Load and assign values to number of dipoles (Nd)
+%==========================================================================
+fprintf('\nLoading or creating lead field matrix')
 [L,~] = spm_eeg_lgainmat(D);    % Generate/load lead field
 Nd=size(L,2); % Number of sources in lead field matrix
 Np = Nd; % Number of priors
 
+%==========================================================================
 % Calculate the number of priors
 %==========================================================================
 if ~isempty(Ip)
@@ -141,16 +128,17 @@ else
     Ip=ceil([1:Np]*Nd/Np);
 end
 
-
+%==========================================================================
+% Account for bad channels: get the indices of good channels
+%==========================================================================
 Ic  = setdiff(D.indchantype(modalities), badchannels(D));
-Nd    = size(L,2);      % Number of dipoles
 fprintf(' - done\n')
 
-
 %==========================================================================
-% Spatial projectors: eliminate low SNR spatial modes
+% Spatial projectors: construct a spatial projector and apply this to the
+% forward model, i.e. eliminate low SNR spatial modes
 %==========================================================================
-[A, UL, Is, Ns] = construct_spatial_projector(inverse, Nm, L, Nd);
+[A, UL, Is, Ns] = construct_apply_spatial_projector(inverse, Nm, L, Nd);
 
 %==========================================================================
 % Time-window of interest (in milliseconds)
@@ -165,18 +153,13 @@ if ~no_temporal_filter
 else
     T=eye(length(It));
     qV=T;
-    pst=0;dct=0;
+    pst=0;dct=0;Nb=1;
 end 
 
-% Hanning window
-%----------------------------------------------------------------------
-
-if Han
-    W  = sparse(1:Nb,1:Nb,spm_hanning(Nb)); % Use hanning unless specified
-else
-    W=1;
-end
-
+%==========================================================================
+% Construct Hanning window
+%==========================================================================
+W = construct_Hanning_window(Han, Nb);
 
 %==========================================================================
 % Get trials (a.k.a conditions)
@@ -184,7 +167,7 @@ end
 [trial, Ntrialtypes] = get_trials(D);
 
 %==========================================================================
-% Get temporal covariance (Y'*Y) to find temporal modes
+% Get temporal covariance (Y'*Y)
 %==========================================================================
 [YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A);
 
@@ -194,30 +177,10 @@ end
 YY         = W'*YY*W;     % Hanning
 YTY         = T'*YY*T;     % Filter
 
-
-%======================================================================
-
-if isempty(Nt) %% automatically assign appropriate number of temporal modes
-    [U, E]  = spm_svd(YTY,exp(-8));          % get temporal modes
-    if isempty(U) %% fallback
-        warning('nothing found using spm svd, using svd');
-        [U, E]  = svd(YTY);          % get temporal modes
-    end
-    E      = diag(E)/trace(YTY);            % normalise variance
-    Nr     = min(length(E),Nmax);           % number of temporal modes
-    Nr=max(Nr,1); %% use at least one mode
-else %% use predefined number of modes
-    [U, E]  = svd(YTY);          % get temporal modes
-    E      = diag(E)/trace(YTY);            % normalise variance
-    disp('Fixed number of temporal modes');
-    Nr=Nt;
-end
-
-V      = U(:,1:Nr);                     % temporal modes
-VE     = sum(E(1:Nr));                  % variance explained
-
-fprintf('Using %i temporal modes, ',Nr)
-fprintf('accounting for %0.2f percent average variance\n',full(100*VE))
+%==========================================================================
+% Get the temporal modes from the windowed and filtered data
+%==========================================================================
+[U, Nr, V, VE] = get_temporal_modes(Nt, YTY, Nmax);
 
 % projection and whitening
 %----------------------------------------------------------------------
@@ -225,9 +188,9 @@ S      = T*V;                           % temporal projector
 Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 
 
-
-% get spatial covariance (Y*Y') for Gaussian process model
-%======================================================================
+%==========================================================================
+% Get Spatial Covariance: Y*Y' for Gaussian process model
+%==========================================================================
 [AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
 
 ID    = spm_data_id(AY); %% get a unique ID for these filtered data
@@ -525,9 +488,9 @@ D.inv{val}.method  = 'Imaging';
 
 return
 
-function [A, UL, Is, Ns] = construct_spatial_projector(inverse, Nm, L, Nd)
+function [A, UL, Is, Ns] = construct_apply_spatial_projector(inverse, Nm, L, Nd)
 % Carries out a PCA on the LL' (aka the Gram matrix) and reduces the lead
-% fields.
+% field matrix.
 %
 % Returns:
 % A - the spatial projector (the matrix the data and the lead field are
@@ -583,7 +546,7 @@ end
 It     = (w/1000 - D.timeonset)*D.fsample + 1;
 It     = max(1,It(1)):min(It(end), length(D.time));
 It     = fix(It);
-disp(sprintf('Number of samples %d',length(It)))
+fprintf('\nNumber of samples %d',length(It))
 
 function [trial, Ntrialtypes] = get_trials(D)
 try
@@ -687,3 +650,49 @@ T      = spm_dctmtx(Nb,Nb);
 j      = find( (dct >= lpf) & (dct <= hpf) ); % This is the wrong way round but leave for now for compatibility with spm_eeg_invert
 T      = T(:,j);                    % Apply the filter to discrete cosines
 dct    = dct(j);                    % Frequencies accepted
+
+function modalities = check_subjects_and_modality(D, val)
+% Check to see how many subjects are being fed to the function. This only
+% works for a single subject.
+Nl = length(D);
+if Nl>1
+    error('function only defined for a single subject');
+end
+
+% Check modalities - this function only works for single modality
+%--------------------------------------------------------------------------
+modalities = D.inv{val}.forward.modality;
+if size(modalities,1)>1
+    error('not defined for multiple modalities');
+end
+
+function W = construct_Hanning_window(Han, Nb)
+
+if Han
+    W  = sparse(1:Nb,1:Nb,spm_hanning(Nb)); % Use hanning unless specified
+else
+    W=1;
+end
+
+function [U, Nr, V, VE] = get_temporal_modes(Nt, YTY, Nmax)
+if isempty(Nt) %% automatically assign appropriate number of temporal modes
+    [U, E]  = spm_svd(YTY,exp(-8));          % get temporal modes
+    if isempty(U) %% fallback
+        warning('nothing found using spm svd, using svd');
+        [U, E]  = svd(YTY);          % get temporal modes
+    end
+    E      = diag(E)/trace(YTY);            % normalise variance
+    Nr     = min(length(E),Nmax);           % number of temporal modes
+    Nr=max(Nr,1); %% use at least one mode
+else %% use predefined number of modes
+    [U, E]  = svd(YTY);          % get temporal modes
+    E      = diag(E)/trace(YTY);            % normalise variance
+    disp('Fixed number of temporal modes');
+    Nr=Nt;
+end
+
+V      = U(:,1:Nr);                     % temporal modes
+VE     = sum(E(1:Nr));                  % variance explained
+
+fprintf('Using %i temporal modes, ',Nr)
+fprintf('accounting for %0.2f percent average variance\n',full(100*VE))
