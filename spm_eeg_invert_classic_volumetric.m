@@ -77,19 +77,16 @@ function [D] = spm_eeg_invert_classic_volumetric(D,val)
 %==========================================================================
 modalities = check_subjects_and_modality(D, val);
 
-
-% D - SPM data structure
+%==========================================================================
+% Unpack D object: get the inversion index and inversion struct.
 %==========================================================================
 if nargin > 1
     D.val = val;
 elseif ~isfield(D, 'val')
     D.val = 1;
 end
-
 val=D.val;
-
 inverse   = D.inv{val}.inverse;
-
 
 %==========================================================================
 % Check function arguments: assign defaults if necessary
@@ -109,7 +106,6 @@ try     Qe0             = inverse.Qe0;            catch, Qe0             = exp(-
 try     inverse.A       = inverse.A;              catch, inverse.A       = [];           end %% orthogonal channel modes
 try     no_temporal_filter = inverse.no_temporal_filter; catch, no_temporal_filter = 1;   end
 try     complexind      = inverse.complexind;     catch, complexind      = [];           end
-
 
 %==========================================================================
 % Lead fields: Load and assign values to number of dipoles (Nd)
@@ -132,7 +128,6 @@ end
 % Account for bad channels: get the indices of good channels
 %==========================================================================
 Ic  = setdiff(D.indchantype(modalities), badchannels(D));
-fprintf(' - done\n')
 
 %==========================================================================
 % Spatial projectors: construct a spatial projector and apply this to the
@@ -182,18 +177,18 @@ YTY         = T'*YY*T;     % Filter
 %==========================================================================
 [U, Nr, V, VE] = get_temporal_modes(Nt, YTY, Nmax);
 
-% projection and whitening
-%----------------------------------------------------------------------
+%==========================================================================
+% Apply temporal projector
+%==========================================================================
 S      = T*V;                           % temporal projector
 Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
-
 
 %==========================================================================
 % Get Spatial Covariance: Y*Y' for Gaussian process model
 %==========================================================================
 [AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
 
-ID    = spm_data_id(AY); %% get a unique ID for these filtered data
+
 
 % assuming equal noise over subjects (Qe) and modalities AQ
 %--------------------------------------------------------------------------
@@ -382,7 +377,7 @@ end
 
 
 %==========================================================================
-% Step 2: Re-estimate for each subject separately (fusing all modalities)
+% Step 2: Re-estimate
 %==========================================================================
 
 fprintf('Inverting subject 1\n')
@@ -447,6 +442,11 @@ end
 R2   = 100*(SST - SSR)/SST;
 fprintf('Percent variance explained %.2f (%.2f)\n',full(R2),full(R2*VE));
 
+%==========================================================================
+% Get a unique ID for the filtered data which the inference was run on
+%==========================================================================
+ID    = spm_data_id(AY);
+
 % Save results
 %======================================================================
 inverse.type     = type;                 % Inverse model
@@ -498,7 +498,6 @@ function [A, UL, Is, Ns] = construct_apply_spatial_projector(inverse, Nm, L, Nd)
 % UL - the reduced lead field matrix
 % Is - the indices of the sources to be modelled
 % Ns - the number of sources to be modelled
-fprintf('Optimising and aligning spatial modes ...\n')
 
 if isempty(inverse.A) % no spatial modes prespecified
     if isempty(Nm) %% number of modes not specifiedd
@@ -615,11 +614,11 @@ for j = 1:Ntrialtypes
         Nn       = Nn + Nr;         % number of samples
         YY          = Y*Y';                  % and covariance
         Ntrials=Ntrials+1;
-        % accumulate statistics (subject-specific)
+        % accumulate statistics
         %--------------------------------------------------------------
         UY{j}     = UY{j} + Y;           % condition-specific ERP
-        UYYU     = UYYU + YY;          % subject-specific covariance
-        % and pool for optimisation of spatial priors over subjects
+        UYYU     = UYYU + YY;
+        % and pool for optimisation of spatial priors
         %--------------------------------------------------------------
         AY{end + 1} = Y;                     % pooled response for MVB
         AYYA        = AYYA    + YY;          % pooled response for ReML
