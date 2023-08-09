@@ -61,16 +61,12 @@ function [D] = spm_eeg_invert_classic_volumetric(D,val)
 %     inverse.F      - log-evidence
 %     inverse.VE     - variance explained in spatial/temporal subspaces (%)
 %     inverse.R2     - variance in subspaces accounted for by model (%)
-%__________________________________________________________________________
-%
 %
 % This version is for single subject single modality analysis and therefore
 % contains none of the associated scaling factors. No symmetric priors are
 % used in this implementation (just single patches) There is an option for
-% a Beamforming prior : inversion type 'EBB' also added new beamforming
-% method- using GS rather than ARD- from Juan David Martinez Vargas 'EBBgs'
-%
-%==========================================================================
+% a Beamforming prior : inversion type 'EBB'.
+
 
 %==========================================================================
 % Check data: only single subject and single modality supported
@@ -164,14 +160,14 @@ W = construct_Hanning_window(Han, Nb);
 %==========================================================================
 % Get temporal covariance (Y'*Y)
 %==========================================================================
-[YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A);
+[YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, ...
+    trial, complexind, Ic, It, A);
 
 %==========================================================================
 % Apply any Hanning and filtering
 %==========================================================================
 YY  = W' * YY * W;     % Hanning
 YTY = T' * YY * T;     % Filter
-
 
 %==========================================================================
 % Get the temporal modes from the windowed and filtered data
@@ -187,7 +183,8 @@ Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 %==========================================================================
 % Get Spatial Covariance: Y*Y' for Gaussian process model
 %==========================================================================
-[AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
+[AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial,...
+    badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
 
 %==========================================================================
 % Data quality check: ensure that the data are full rank
@@ -199,11 +196,6 @@ check_data(AYYA, A);
 AQeA   = A*QE*A';           % Note that here it is A*A'
 Qe{1}  = AQeA/(trace(AQeA)); % it means IID noise in virtual sensor space
 Q0          = Qe0*trace(AYYA)*Qe{1}./sum(Nn); %% fixed (min) level of sensor space variance
-
-
-%==========================================================================
-% Step 1: Optimise spatial priors
-%==========================================================================
 
 %==========================================================================
 % Create Source Priors
@@ -226,46 +218,25 @@ switch(type)
 end
 fprintf('Using %d spatial source priors provided\n',length(Qp));
 
-
 %==========================================================================
 % Step 1: Run the inference for the first time.
 %==========================================================================
 QP     = {};
 LQP    = {};
 LQPL   = {};
-[QP, LQP, LQPL] = run_inference(type, Qp, Ns, AY, UL, Qe, QP, LQP, LQPL, AYYA, LQpL, Nn, Q0);
-
+[QP, LQP, LQPL] = run_first_inference(type, Qp, Ns, AY, UL, Qe, QP, LQP,...
+    LQPL, AYYA, LQpL, Nn, Q0);
 
 %==========================================================================
 % Step 2: Run the inference for the second time, having collapsed all
 % priors into one summed prior.
 %==========================================================================
-fprintf('Inverting subject 1\n')
+[Np, Ne, Cy, h, F] = run_second_inference(LQPL, Qe, Q0, AYYA, Nn);
 
-
-% re-do ReML (with informative hyperpriors)
-%----------------------------------------------------------------------
-Np    = length(LQPL);       % Final number of priors
-Ne    = length(Qe);         % Sensor noise prior
-
-Q     = [{Q0} LQPL]; %% sensor corvariance prior:  Qe is identity with unit trace, LQPL is in the units of data
-
-[Cy,h,~,F]= spm_reml_sc(AYYA,[],Q,Nn,-4,16,Q0);
-
-% Recalculate F here
-Cp    = sparse(0);
-LCp   = sparse(0);
-hp    = h(Ne + (1:Np));
-for j = 1:Np
-    Cp  =  Cp + hp(j)*QP{j};
-    LCp = LCp + hp(j)*LQP{j};
-end
-
-% MAP estimates of instantaneous sources
-%======================================================================
-% This is equivalent to M = Cp*UL'*inv(Qe + UL*Cp*UL'))
-% with Cp the posterior source covariance (with optimal h values)
-M     = LCp'/Cy;
+%==========================================================================
+% Construct MAP weights matrix which maps from sensor to source data
+%==========================================================================
+[Cp, LCp, M] = build_MAP_inversion(h, Ne, Np, QP, LQP, Cy);
 
 % conditional variance (leading diagonal)
 % Cq    = Cp - Cp*L'*iC*L*Cp;
@@ -307,7 +278,7 @@ inverse.type     = type;                 % Inverse model
 inverse.M        = M;                    % MAP projector (reduced)
 inverse.J        = J;                    % Conditional expectation
 inverse.Y        = Y;                    % ERP data (reduced)
-inverse.L        = UL;                   % Lead-field (reduced)
+inverse.L        = UL;                   % Lead field (reduced)
 inverse.qC       = Cq;                   % Spatial covariance
 inverse.tempU    = U;                    % Temporal SVD
 inverse.E        = V;                    % Temporal modes
@@ -320,7 +291,7 @@ inverse.Ik       = Ik;                   % Indices of trials used
 try
     inverse.Ic{1} = Ic;                  % Indices of good channels
 catch
-    inverse.Ic    = Ic;                   % Indices of good channels
+    inverse.Ic    = Ic;                 
 end
 inverse.Nd       = Nd;                   % Number of dipoles
 inverse.pst      = pst;                  % Peristimulus time
@@ -625,7 +596,7 @@ QP{end + 1}   = diag(qp);
 LQP{end + 1}  = UL*qp;
 LQPL{end + 1} = LQP{end}*UL';
 
-function [QP, LQP, LQPL] = run_inference(type, Qp, Ns, AY, UL, Qe, QP, LQP, LQPL, AYYA, LQpL, Nn, Q0)
+function [QP, LQP, LQPL] = run_first_inference(type, Qp, Ns, AY, UL, Qe, QP, LQP, LQPL, AYYA, LQpL, Nn, Q0)
 switch(type)
     case {'MSP','GS','EBBgs'}
         % Greedy search over MSPs
@@ -694,3 +665,28 @@ function check_data(AYYA, A)
 if rank(AYYA)~=size(A,1)
     warning('AYYA IS RANK DEFICIENT');
 end
+
+function [Np, Ne, Cy, h, F] = run_second_inference(LQPL, Qe, Q0, AYYA, Nn)
+% re-do ReML (with informative hyperpriors)
+%----------------------------------------------------------------------
+Np    = length(LQPL);       % Final number of priors
+Ne    = length(Qe);         % Sensor noise prior
+Q     = [{Q0} LQPL]; %% sensor corvariance prior:  Qe is identity with unit trace, LQPL is in the units of data
+[Cy,h,~,F]= spm_reml_sc(AYYA,[],Q,Nn,-4,16,Q0);
+
+function [Cp, LCp, M] = build_MAP_inversion(h, Ne, Np, QP, LQP, Cy)
+fprintf('Building reconstruction weights for subject 1\n')
+% Recalculate F here
+Cp    = sparse(0);
+LCp   = sparse(0);
+hp    = h(Ne + (1:Np));
+for j = 1:Np
+    Cp  =  Cp + hp(j)*QP{j};
+    LCp = LCp + hp(j)*LQP{j};
+end
+
+% MAP estimates of instantaneous sources
+%======================================================================
+% This is equivalent to M = Cp*UL'*inv(Qe + UL*Cp*UL'))
+% with Cp the posterior source covariance (with optimal h values)
+M     = LCp'/Cy;
