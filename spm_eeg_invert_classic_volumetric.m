@@ -42,7 +42,6 @@ function [D] = spm_eeg_invert_classic_volumetric(D,val)
 %                       sensor data through
 %
 % Evaluates:
-%
 %     inverse.M      - MAP projector (reduced)
 %     inverse.J{i}   - Conditional expectation (i conditions) J = M*U*Y
 %     inverse.L      - Lead field (reduced UL := U*L)
@@ -625,7 +624,18 @@ fprintf('Using %i temporal modes, ',Nr)
 fprintf('accounting for %0.2f percent average variance\n',full(100*VE))
 
 function [Qp, LQpL] = build_MSP_source_priors(Np, Nd, UL)
-% create MSP spatial basis set in source space
+% Create MSP spatial basis set in source space
+%
+% Input arguments:
+%   Np    - Number of basis vectors to create
+%   Nd    - Dimensionality of the source space
+%   UL    - Reduced lead field matrix for linear transformation
+%
+% Output arguments:
+%   Qp    - Cell array containing the created basis vectors
+%   LQpL  - Cell array containing linear transformed basis vectors
+%
+
 %------------------------------------------------------------------
 Qp    = {};
 LQpL  = {};
