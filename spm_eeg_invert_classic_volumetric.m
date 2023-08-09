@@ -160,7 +160,7 @@ W = construct_Hanning_window(Han, Nb);
 %==========================================================================
 % Get temporal covariance (Y'*Y)
 %==========================================================================
-[YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, ...
+[YY, badtrialind, Ik, Y] = get_temporal_covariance(D, Ntrialtypes, ...
     trial, complexind, Ic, It, A);
 
 %==========================================================================
@@ -184,7 +184,7 @@ Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 % Get Spatial Covariance: Y*Y' for Gaussian process model
 %==========================================================================
 [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial,...
-    badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
+    badtrialind, complexind, Ic, It, Y, S, A, Nr);
 
 %==========================================================================
 % Data quality check: ensure that the data are full rank
@@ -317,51 +317,68 @@ function [A, UL, Is, Ns] = construct_apply_spatial_projector(inverse, Nm, L, Nd)
 % Carries out a PCA on the LL' (aka the Gram matrix) and reduces the lead
 % field matrix.
 %
+% Input arguments:
+%   inverse - Inverse model parameters
+%   Nm      - Number of spatial modes (if not specified, determined automatically)
+%   L       - Lead field matrix
+%   Nd      - Number of dipoles
+%
 % Returns:
-% A - the spatial projector (the matrix the data and the lead field are
-% left-multiplied by)
-% UL - the reduced lead field matrix
-% Is - the indices of the sources to be modelled
-% Ns - the number of sources to be modelled
+%   A       - Spatial projector matrix
+%   UL      - Reduced lead field matrix
+%   Is      - Indices of the sources to be modeled
+%   Ns      - Number of sources to be modeled
 
-if isempty(inverse.A) % no spatial modes prespecified
-    if isempty(Nm) %% number of modes not specifiedd
-        [U,~,~]    = spm_svd((L*L'),exp(-16));
-        A     = U';                 % spatial projector A
-        UL    = A*L;
-        
+if isempty(inverse.A) % no spatial modes pre-specified
+    if isempty(Nm) %% number of modes not specified
+        [U, ~, ~] = spm_svd((L * L'), exp(-16));
+        A         = U';                % spatial projector A
+        UL        = A * L;
     else % number of modes pre-specified
-        [U,ss,~]    = spm_svd((L*L'),0);
-        if length(ss)<Nm
+        [U, ss, ~] = spm_svd((L * L'), 0);
+        if length(ss) < Nm
             disp('number available');
             length(ss)
             error('Not this many spatial modes in lead fields');
-            
         end
         disp('using preselected number spatial modes !');
-        A     = U(:,1:Nm)';                 % spatial projector A
-        UL    = A*L;
+        A         = U(:, 1:Nm)';        % spatial projector A
+        UL        = A * L;
     end
 else %% U was specified in input
     disp('Using pre-specified spatial modes');
     if isempty(Nm)
-        error('Need to specify number of spatial modes if U is prespecified');
+        error('Need to specify number of spatial modes if U is pre-specified');
     end
     
-    A=inverse.A;
-    UL=A*L;
+    A   = inverse.A;
+    UL  = A * L;
 end
 
-Nm    = size(UL,1);         % Number of spatial projectors
+Nm          = size(UL, 1);            % Number of spatial projectors
+clear ss;
 
-clear ss
+Is          = 1:Nd;                   % Indices of active dipoles - all of them.
+Ns          = length(Is);             % Number of sources, Ns
+fprintf('Using %d spatial modes', Nm)
 
-
-Is    = 1:Nd;               % Indices of active dipoles - all of them.
-Ns    = length(Is);         % Number of sources, Ns
-fprintf('Using %d spatial modes',Nm)
 
 function [w, It] = get_time_window_of_interest(woi, D)
+% Get the time window of interest in samples and indices.
+%
+% This function calculates the time window of interest in samples and its
+% corresponding indices based on the specified window of interest (woi) and
+% the input data struct (D).
+%
+% Input arguments:
+%   woi - Window of interest in milliseconds (1x2 vector) [start_time,
+%   end_time] 
+%   D   - Input data struct.
+%
+% Returns:
+%   w   - Time window of interest in milliseconds [start_time, end_time] 
+%   It  - Indices corresponding to the time window of interest
+%
 if isempty(woi)
     w      = 1000*[min(D.time) max(D.time)];
 else
@@ -373,6 +390,18 @@ It     = fix(It);
 fprintf('\nNumber of samples %d',length(It))
 
 function [trial, Ntrialtypes] = get_trials(D)
+% Get trial information and the number of trial types from the input data.
+%
+% This function extracts trial information and calculates the number of trial
+% types from the provided data struct (D).
+%
+% Input arguments:
+%   D - Input data struct containing trial-related information
+%
+% Returns:
+%   trial         - Trial information (cell array of trial types)
+%   Ntrialtypes   - Number of trial types
+%
 try
     trial = D.inv{D.val}.inverse.trials;
 catch
@@ -380,10 +409,31 @@ catch
 end
 Ntrialtypes=length(trial);
 
-function [YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A)
+function [YY, badtrialind, Ik, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A)
+% Calculate the temporal covariance matrix and related values.
+%
+% This function calculates the temporal covariance matrix (YY) based on the
+% provided input data struct (D) and various parameters.
+%
+% Input arguments:
+%   D            - Input data struct
+%   Ntrialtypes  - Number of trial types
+%   trial        - Trial information (cell array of trial types)
+%   complexind   - Complex channel indices (optional)
+%   Ic           - Indices of good channels
+%   It           - Indices of time bins
+%   A            - Spatial projector matrix
+%
+% Returns:
+%   YY           - Temporal covariance matrix
+%   badtrialind  - Indices of bad trials
+%   Ik           - Indices of trials used
+%   Y            - Projected data
+%
+
 YY=0;% instantiate value of temporal covariance
 N=0; % number of trials used in covariance calculation
-
+i=sqrt(-1); % imaginary number, for use with complex (e.g. frequency domain data)
 badtrialind=D.badtrials;
 Ik=[]; %% keep a record of trials used
 for j = 1:Ntrialtypes                          % pool over conditions
@@ -392,7 +442,7 @@ for j = 1:Ntrialtypes                          % pool over conditions
     c=c(setxor(1:length(c),ib));
     Ik=[Ik c];
     Nk    = length(c);
-    i=sqrt(-1);
+    
     for k = 1:Nk
         if isempty(complexind)
             data=D(Ic,It,c(k));
@@ -400,21 +450,20 @@ for j = 1:Ntrialtypes                          % pool over conditions
             data=squeeze(D(Ic,complexind(1,:),c(k))+i.*D(Ic,complexind(2,:),c(k)));
         end
         Y     = A*data;
-        
         YY    = YY + Y'*Y;
         N     = N + 1;
     end
 end
 YY=YY./N;
 
-function [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr)
+function [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, Y, S, A, Nr)
 % loop over Ntrialtypes trial types
 %----------------------------------------------------------------------
 UYYU = 0;
 AYYA=0;
 Nn    =0;                             % number of samples
 AY={};
-
+i=sqrt(-1); % imaginary number, for use with complex (e.g. frequency domain data)
 for j = 1:Ntrialtypes
     UY{j} = sparse(0);
     c       = D.indtrial(trial{j});
