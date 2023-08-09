@@ -147,47 +147,7 @@ fprintf(' - done\n')
 %==========================================================================
 % Spatial projectors: eliminate low SNR spatial modes
 %==========================================================================
-fprintf('Optimising and aligning spatial modes ...\n')
-
-if isempty(inverse.A) % no spatial modes prespecified
-    if isempty(Nm) %% number of modes not specifiedd
-        [U,~,~]    = spm_svd((L*L'),exp(-16));
-        A     = U';                 % spatial projector A
-        UL    = A*L;
-        
-    else % number of modes pre-specified
-        [U,ss,~]    = spm_svd((L*L'),0);
-        if length(ss)<Nm
-            disp('number available');
-            length(ss)
-            error('Not this many spatial modes in lead fields');
-            
-        end
-        disp('using preselected number spatial modes !');
-        A     = U(:,1:Nm)';                 % spatial projector A
-        UL    = A*L;
-    end
-else %% U was specified in input
-    disp('Using pre-specified spatial modes');
-    if isempty(Nm)
-        error('Need to specify number of spatial modes if U is prespecified');
-    end
-    
-    A=inverse.A;
-    UL=A*L;
-end
-
-Nm    = size(UL,1);         % Number of spatial projectors
-
-clear ss
-
-
-Is    = 1:Nd;               % Indices of active dipoles - all of them.
-Ns    = length(Is);         % Number of sources, Ns
-fprintf('Using %d spatial modes',Nm)
-%==========================================================================
-% Spatial projectors
-%==========================================================================
+[A, UL, Is, Ns] = construct_spatial_projector(inverse, Nm, L, Nd);
 
 
 %==========================================================================
@@ -667,3 +627,52 @@ D.inv{val}.method  = 'Imaging';
 
 
 return
+
+function [A, UL, Is, Ns] = construct_spatial_projector(inverse, Nm, L, Nd)
+% Carries out a PCA on the LL' (aka the Gram matrix) and reduces the lead
+% fields.
+%
+% Returns:
+% A - the spatial projector (the matrix the data and the lead field are
+% left-multiplied by)
+% UL - the reduced lead field matrix
+% Is - the indices of the sources to be modelled
+% Ns - the number of sources to be modelled
+fprintf('Optimising and aligning spatial modes ...\n')
+
+if isempty(inverse.A) % no spatial modes prespecified
+    if isempty(Nm) %% number of modes not specifiedd
+        [U,~,~]    = spm_svd((L*L'),exp(-16));
+        A     = U';                 % spatial projector A
+        UL    = A*L;
+        
+    else % number of modes pre-specified
+        [U,ss,~]    = spm_svd((L*L'),0);
+        if length(ss)<Nm
+            disp('number available');
+            length(ss)
+            error('Not this many spatial modes in lead fields');
+            
+        end
+        disp('using preselected number spatial modes !');
+        A     = U(:,1:Nm)';                 % spatial projector A
+        UL    = A*L;
+    end
+else %% U was specified in input
+    disp('Using pre-specified spatial modes');
+    if isempty(Nm)
+        error('Need to specify number of spatial modes if U is prespecified');
+    end
+    
+    A=inverse.A;
+    UL=A*L;
+end
+
+Nm    = size(UL,1);         % Number of spatial projectors
+
+clear ss
+
+
+Is    = 1:Nd;               % Indices of active dipoles - all of them.
+Ns    = length(Is);         % Number of sources, Ns
+fprintf('Using %d spatial modes',Nm)
