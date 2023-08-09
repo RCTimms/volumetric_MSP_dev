@@ -126,8 +126,8 @@ end
 Ic  = setdiff(D.indchantype(modalities), badchannels(D));
 
 %==========================================================================
-% Spatial projectors: construct a spatial projector and apply this to the
-% forward model, i.e. eliminate low SNR spatial modes
+% Spatial projectors: construct a spatial projector matrix, A, and apply
+% this to the forward model, i.e. eliminate low SNR spatial modes
 %==========================================================================
 [A, UL, Is, Ns] = construct_apply_spatial_projector(inverse, Nm, L, Nd);
 
@@ -181,7 +181,9 @@ S      = T*V;                           % temporal projector
 Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 
 %==========================================================================
-% Get Spatial Covariance: Y*Y' for Gaussian process model
+% Get Spatial Covariance: Y*Y' for Gaussian process model. n.b. this is
+% where the spatial transformation is applied to the sensor level data,
+% i.e. Y -> AY
 %==========================================================================
 [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial,...
     badtrialind, complexind, Ic, It, Y, S, A, Nr);
@@ -272,7 +274,8 @@ fprintf('Percent variance explained %.2f (%.2f)\n',full(R2),full(R2*VE));
 %==========================================================================
 ID    = spm_data_id(AY);
 
-% Save results
+%==========================================================================
+% Save Results
 %======================================================================
 inverse.type     = type;                 % Inverse model
 inverse.M        = M;                    % MAP projector (reduced)
@@ -457,14 +460,41 @@ end
 YY=YY./N;
 
 function [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, Y, S, A, Nr)
-% loop over Ntrialtypes trial types
-%----------------------------------------------------------------------
-UYYU = 0;
-AYYA=0;
-Nn    =0;                             % number of samples
-AY={};
-i=sqrt(-1); % imaginary number, for use with complex (e.g. frequency domain data)
-for j = 1:Ntrialtypes
+% Calculate spatial covariance matrices and related values.
+%
+% This function calculates spatial covariance matrices (AYYA, UYYU) and various
+% related values based on the provided input data struct (D) and parameters.
+%
+% Input arguments:
+%   Ntrialtypes  - Number of trial types
+%   D            - Input data struct
+%   trial        - Trial information (cell array of trial types)
+%   badtrialind  - Indices of bad trials
+%   complexind   - Complex channel indices (optional)
+%   Ic           - Indices of good channels
+%   It           - Indices of time bins
+%   Y            - Projected data
+%   S            - Temporal projector matrix
+%   A            - Spatial projector matrix
+%   Nr           - Number of repetitions (samples per trial)
+%
+% Returns:
+%   AYYA         - Pooled response for ReML (spatial covariance)
+%   Nn           - Total number of samples
+%   AY           - Pooled response for MVB (matrix)
+%   UY           - Condition-specific ERP (cell array)
+%   Y            - Projected data
+%
+
+UYYU = 0;  % Initialize second-order response
+AYYA = 0;  % Initialize pooled response for ReML
+Nn   = 0;  % Initialize total number of samples
+AY = {};   % Initialize pooled response for MVB
+UY = {};   % Initialize condition-specific ERP
+
+i = sqrt(-1);  % Imaginary unit
+
+for j = 1:Ntrialtypes % loop over Ntrialtypes trial types
     UY{j} = sparse(0);
     c       = D.indtrial(trial{j});
     [~,ib]=intersect(c,badtrialind); %% remove bad trials ib if there are any
@@ -481,7 +511,11 @@ for j = 1:Ntrialtypes
             data=D(Ic,complexind(1,:),c(k))+i.*D(Ic,complexind(2,:),c(k));
         end
         Y       = data*S; %% in temporal subspace
+        
+        % Now we apply the spatial transformation to the sensor level data,
+        % Y
         Y=A*Y; %%  in spatial subspace
+
         % accumulate first & second-order responses
         %--------------------------------------------------------------
         Nn       = Nn + Nr;         % number of samples
@@ -500,8 +534,22 @@ end
 AY=spm_cat(AY); %% goes to MVB/GS algorithm
 
 function [pst, dct, Nb, qV, T] = construct_temporal_filter(D, It, sdv, lpf, hpf)
-% Peristimulus time
-%----------------------------------------------------------------------
+% Construct temporal filter parameters.
+%
+% Input arguments:
+%   D     - Input data struct
+%   It    - Indices of time bins
+%   sdv   - Standard deviation parameter for serial correlations
+%   lpf   - Low-pass frequency for DCT filter
+%   hpf   - High-pass frequency for DCT filter
+%
+% Returns:
+%   pst   - Peristimulus time (ms)
+%   dct   - DCT frequencies (Hz)
+%   Nb    - Number of time bins
+%   qV    - Samples* samples covariance matrix
+%   T     - Temporal projector matrix
+
 pst    = 1000*D.time;                   % peristimulus time (ms)
 pst    = pst(It);                       % windowed time (ms)
 dur    = (pst(end) - pst(1))/1000;      % duration (s)
@@ -538,7 +586,15 @@ if size(modalities,1)>1
 end
 
 function W = construct_Hanning_window(Han, Nb)
-
+% Construct Hanning window if requested
+%
+% Input arguments:
+%   Han   - Flag indicating whether to use Hanning window (1) or not (0)
+%   Nb    - Number of time bins
+%
+% Returns:
+%   W     - Hanning window
+%
 if Han
     W  = sparse(1:Nb,1:Nb,spm_hanning(Nb)); % Use hanning unless specified
 else
