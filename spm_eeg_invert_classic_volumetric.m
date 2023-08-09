@@ -617,7 +617,7 @@ for j = 1:Ntrialtypes
     J{j} = M*UY{j};
     % sum of squares
     %------------------------------------------------------------------
-    SSR  = SSR + sum(var((UY{j} - UL*J{j}))); %% changed variance calculation
+    SSR  = SSR + sum(var((UY{j} - UL*J{j}))); % changed variance calculation
     SST  = SST + sum(var( UY{j}));
 end
 
@@ -629,35 +629,35 @@ fprintf('Percent variance explained %.2f (%.2f)\n',full(R2),full(R2*VE));
 
 % Save results
 %======================================================================
-inverse.type   = type;                 % inverse model
-inverse.M      = M;                    % MAP projector (reduced)
-inverse.J      = J;                    % Conditional expectation
-inverse.Y      = Y;                    % ERP data (reduced)
-inverse.L      = UL;                   % Lead-field (reduced)
-inverse.qC     = Cq;                   % spatial covariance
-inverse.tempU  = U;                    % temporal SVD
-inverse.E      = V;                    % temporal modes
-inverse.qV     = Vq;                   % temporal correlations
-inverse.T      = S;                    % temporal projector
-inverse.U      = {A};                    % spatial projector
-inverse.Is     = Is;                   % Indices of active dipoles
-inverse.It     = It;                   % Indices of time bins
-inverse.Ik     =Ik;                    % indices of trials used
+inverse.type     = type;                 % Inverse model
+inverse.M        = M;                    % MAP projector (reduced)
+inverse.J        = J;                    % Conditional expectation
+inverse.Y        = Y;                    % ERP data (reduced)
+inverse.L        = UL;                   % Lead-field (reduced)
+inverse.qC       = Cq;                   % Spatial covariance
+inverse.tempU    = U;                    % Temporal SVD
+inverse.E        = V;                    % Temporal modes
+inverse.qV       = Vq;                   % Temporal correlations
+inverse.T        = S;                    % Temporal projector
+inverse.U        = {A};                  % Spatial projector
+inverse.Is       = Is;                   % Indices of active dipoles
+inverse.It       = It;                   % Indices of time bins
+inverse.Ik       = Ik;                   % Indices of trials used
 try
-    inverse.Ic{1}     = Ic;            % Indices of good channels
+    inverse.Ic{1} = Ic;                  % Indices of good channels
 catch
     inverse.Ic    = Ic;                   % Indices of good channels
 end
-inverse.Nd     = Nd;                   % number of dipoles
-inverse.pst    = pst;                  % peristimulus time
-inverse.dct    = dct;                  % frequency range
-inverse.F      = F;                    % log-evidence
-inverse.ID     = ID;                   % data ID
-inverse.R2     = R2;                   % variance explained (reduced)
-inverse.VE     = R2*VE;                % variance explained
-inverse.woi    = w;                    % time-window inverted
-inverse.Ip     =Ip;                    % patch locations
-inverse.modality = modalities;         % modalities inverted
+inverse.Nd       = Nd;                   % Number of dipoles
+inverse.pst      = pst;                  % Peristimulus time
+inverse.dct      = dct;                  % Frequency range
+inverse.F        = F;                    % Log-evidence
+inverse.ID       = ID;                   % Data ID
+inverse.R2       = R2;                   % Variance explained (reduced)
+inverse.VE       = R2*VE;                % Variance explained
+inverse.woi      = w;                    % Time-window inverted
+inverse.Ip       = Ip;                   % Patch locations
+inverse.modality = modalities;           % Modalities inverted
 
 
 % save in struct
