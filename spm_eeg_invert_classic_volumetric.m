@@ -189,7 +189,6 @@ Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 [AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
 
 
-
 % assuming equal noise over subjects (Qe) and modalities AQ
 %--------------------------------------------------------------------------
 AQeA   = A*QE*A';           % Note that here it is A*A'
@@ -208,91 +207,16 @@ if contains(type,'EBBr')
     fprintf('\n Using regularizing beamformer prior to keep %d percent variance\n',reglevel)
     type='EBBr';
 end
+
 switch(type)
     case {'MSP','GS','ARD'}
-        % create MSP spatial basis set in source space
-        %------------------------------------------------------------------
-        Qp    = {};
-        LQpL  = {};
-        for i = 1:Np
-            q=sparse(Nd,1);
-            q(i)=1;
-            Qp{end + 1}.q   = q;
-            LQpL{end + 1}.q = UL*q;
-        end
-
+        [Qp, LQpL] = build_MSP_source_priors(Np, Nd, UL);
     case {'EBBr'}
-        % create SMOOTH beamforming prior.
-        disp('NB  regularizing EBB algorithm, no smoothing !');
-        %------------------------------------------------------------------
-        QG=speye(Ns,Ns); %% was surface smoothing but not used in volumetric approach
-        [u1,s1,~]=svd(AYYA);
-        eigsum=cumsum(diag(s1))./sum(diag(s1));
-        
-        usecomp=max(find(eigsum<=reglevel/100));
-        plot(1:length(s1),eigsum,usecomp,eigsum(usecomp),'*')
-        fprintf('\nEBB, Keeping %d components\n',usecomp);
-        ayya=u1(:,1:usecomp)'*AYYA*u1(:,1:usecomp);
-        
-        InvCov = spm_inv(ayya);
-        allsource = sparse(Ns,1);
-        Sourcepower = sparse(Ns,1);
-        for bk = 1:Ns
-            q               = QG(:,bk);
-            
-            smthlead = UL*q;     %% THIS IS WHERE THE SMOOTHNESS GETS ADDED
-            smthlead=u1(:,1:usecomp)'*smthlead;
-            normpower = 1/(smthlead'*smthlead);
-            Sourcepower(bk) = 1/(smthlead'*InvCov*smthlead);
-            allsource(bk) = Sourcepower(bk)./normpower;
-        end
-        allsource = allsource/max(allsource);   % Normalise
-        subplot(2,1,1);
-        plot(Sourcepower);
-        subplot(2,1,2)
-        plot(allsource);
-        Qp{1} = diag(allsource);
-        LQpL{1} = UL*diag(allsource)*UL';
-        
+        [Qp, LQpL] = build_EBBr_source_priors(Ns, AYYA, reglevel, UL);
     case {'EBB'}
-        % create SMOOTH beamforming prior.
-        disp('NB  EBB algorithm, no smoothing !');
-        %------------------------------------------------------------------
-        QG=speye(Ns,Ns); %% was surface smoothing but not used in volumetric approach
-        
-        
-        InvCov = spm_inv(AYYA);
-        allsource = sparse(Ns,1);
-        Sourcepower = sparse(Ns,1);
-        for bk = 1:Ns
-            q               = QG(:,bk);
-            smthlead = UL*q;     %% THIS IS WHERE THE SMOOTHNESS GETS ADDED
-            normpower = 1/(smthlead'*smthlead);
-            Sourcepower(bk) = 1/(smthlead'*InvCov*smthlead);
-            allsource(bk) = Sourcepower(bk)./normpower;
-        end
-        allsource = allsource/max(allsource);   % Normalise
-        Qp{1} = diag(allsource);
-        LQpL{1} = UL*diag(allsource)*UL';
-    case {'EBBgs'}
-        % create beamforming prior- Juan David- Martinez Vargas
-        %------------------------------------------------------------------
-        allsource = zeros(Ntrials,Ns);
-        for ii = 1:Ntrials
-            InvCov = spm_inv(YYep{ii});
-            Sourcepower = zeros(Ns,1);
-            for bk = 1:Ns
-                normpower = 1/(UL(:,bk)'*UL(:,bk));
-                Sourcepower(bk) = 1/(UL(:,bk)'*InvCov*UL(:,bk));
-                allsource(ii,bk) = Sourcepower(bk)./normpower;
-            end
-            Qp{ii}.q = allsource(ii,:);
-        end
+        [Qp, LQpL] = build_EBB_source_priors(Ns, AYYA, UL);
     case {'IID','MMN'}
-        % create minimum norm prior
-        %------------------------------------------------------------------
-        Qp{1}   = speye(Ns,Ns);
-        LQpL{1} = UL*UL';
+        [Qp, LQpL] = build_IID_source_priors(Ns,UL);
 end
 
 fprintf('Using %d spatial source priors provided\n',length(Qp));
@@ -379,7 +303,6 @@ end
 %==========================================================================
 % Step 2: Re-estimate
 %==========================================================================
-
 fprintf('Inverting subject 1\n')
 
 
@@ -695,3 +618,75 @@ VE     = sum(E(1:Nr));                  % variance explained
 
 fprintf('Using %i temporal modes, ',Nr)
 fprintf('accounting for %0.2f percent average variance\n',full(100*VE))
+
+function [Qp, LQpL] = build_MSP_source_priors(Np, Nd, UL)
+% create MSP spatial basis set in source space
+%------------------------------------------------------------------
+Qp    = {};
+LQpL  = {};
+for i = 1:Np
+    q=sparse(Nd,1);
+    q(i)=1;
+    Qp{end + 1}.q   = q;
+    LQpL{end + 1}.q = UL*q;
+end
+
+function [Qp, LQpL] = build_EBBr_source_priors(Ns, AYYA, reglevel, UL)
+% create SMOOTH beamforming prior.
+disp('NB  regularizing EBB algorithm, no smoothing !');
+%------------------------------------------------------------------
+QG=speye(Ns,Ns); %% was surface smoothing but not used in volumetric approach
+[u1,s1,~]=svd(AYYA);
+eigsum=cumsum(diag(s1))./sum(diag(s1));
+
+usecomp=max(find(eigsum<=reglevel/100));
+plot(1:length(s1),eigsum,usecomp,eigsum(usecomp),'*')
+fprintf('\nEBB, Keeping %d components\n',usecomp);
+ayya=u1(:,1:usecomp)'*AYYA*u1(:,1:usecomp);
+
+InvCov = spm_inv(ayya);
+allsource = sparse(Ns,1);
+Sourcepower = sparse(Ns,1);
+for bk = 1:Ns
+    q               = QG(:,bk);
+    
+    smthlead = UL*q;     %% THIS IS WHERE THE SMOOTHNESS GETS ADDED
+    smthlead=u1(:,1:usecomp)'*smthlead;
+    normpower = 1/(smthlead'*smthlead);
+    Sourcepower(bk) = 1/(smthlead'*InvCov*smthlead);
+    allsource(bk) = Sourcepower(bk)./normpower;
+end
+allsource = allsource/max(allsource);   % Normalise
+subplot(2,1,1);
+plot(Sourcepower);
+subplot(2,1,2)
+plot(allsource);
+Qp{1} = diag(allsource);
+LQpL{1} = UL*diag(allsource)*UL';
+
+function [Qp, LQpL] = build_IID_source_priors(Ns, UL)
+% create minimum norm prior
+%------------------------------------------------------------------
+Qp{1}   = speye(Ns,Ns);
+LQpL{1} = UL*UL';
+
+function [Qp, LQpL] = build_EBB_source_priors(Ns, AYYA, UL)
+% create SMOOTH beamforming prior.
+disp('NB  EBB algorithm, no smoothing !');
+%------------------------------------------------------------------
+QG=speye(Ns,Ns); %% was surface smoothing but not used in volumetric approach
+
+
+InvCov = spm_inv(AYYA);
+allsource = sparse(Ns,1);
+Sourcepower = sparse(Ns,1);
+for bk = 1:Ns
+    q               = QG(:,bk);
+    smthlead = UL*q;     %% THIS IS WHERE THE SMOOTHNESS GETS ADDED
+    normpower = 1/(smthlead'*smthlead);
+    Sourcepower(bk) = 1/(smthlead'*InvCov*smthlead);
+    allsource(bk) = Sourcepower(bk)./normpower;
+end
+allsource = allsource/max(allsource);   % Normalise
+Qp{1} = diag(allsource);
+LQpL{1} = UL*diag(allsource)*UL';
