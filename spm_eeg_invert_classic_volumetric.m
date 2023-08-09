@@ -169,8 +169,9 @@ W = construct_Hanning_window(Han, Nb);
 %==========================================================================
 % Apply any Hanning and filtering
 %==========================================================================
-YY         = W'*YY*W;     % Hanning
-YTY         = T'*YY*T;     % Filter
+YY  = W' * YY * W;     % Hanning
+YTY = T' * YY * T;     % Filter
+
 
 %==========================================================================
 % Get the temporal modes from the windowed and filtered data
@@ -186,8 +187,12 @@ Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 %==========================================================================
 % Get Spatial Covariance: Y*Y' for Gaussian process model
 %==========================================================================
-[AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
+[AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
 
+%==========================================================================
+% Data quality check: ensure that the data are full rank
+%==========================================================================
+check_data(AYYA, A);
 
 % assuming equal noise over subjects (Qe) and modalities AQ
 %--------------------------------------------------------------------------
@@ -200,8 +205,9 @@ Q0          = Qe0*trace(AYYA)*Qe{1}./sum(Nn); %% fixed (min) level of sensor spa
 % Step 1: Optimise spatial priors
 %==========================================================================
 
-% Create source priors (Qp)
-
+%==========================================================================
+% Create Source Priors
+%==========================================================================
 if contains(type,'EBBr')
     reglevel=str2num(type(5:end));
     fprintf('\n Using regularizing beamformer prior to keep %d percent variance\n',reglevel)
@@ -218,90 +224,21 @@ switch(type)
     case {'IID','MMN'}
         [Qp, LQpL] = build_IID_source_priors(Ns,UL);
 end
-
 fprintf('Using %d spatial source priors provided\n',length(Qp));
 
 
-% Inverse solution
+%==========================================================================
+% Step 1: Run the inference for the first time.
 %==========================================================================
 QP     = {};
 LQP    = {};
 LQPL   = {};
-
-% Get source-level priors
-%--------------------------------------------------------------------------
-switch(type)
-    case {'MSP','GS','EBBgs'}
-        % Greedy search over MSPs
-        %------------------------------------------------------------------
-        Np    = length(Qp);
-        Q     = zeros(Ns,Np); %% NB SETTING UP A NEW Q HERE
-        for i = 1:Np
-            Q(:,i) = Qp{i}.q;
-        end
-        Q = sparse(Q);
-        % Multivariate Bayes (Here is performed the inversion)
-        %------------------------------------------------------------------
-        MVB   = spm_mvb(AY,UL,[],Q,Qe,16); %% Qe is identity with unit trace
-        % Accumulate empirical priors (New set of patches for the second inversion)
-        %------------------------------------------------------------------
-        % MVB.cp provides the final weights of the hyperparameters
-        Qcp           = Q*MVB.cp;
-        QP{end + 1}   = sum(Qcp.*Q,2);
-        LQP{end + 1}  = (UL*Qcp)*Q';
-        LQPL{end + 1} = LQP{end}*UL';
-end
-
-switch(type)
-    case {'MSP','ARD'}
-        % ReML / ARD inversion
-        %------------------------------------------------------------------
-        [~,h,~,~] = spm_sp_reml(AYYA,[],[Qe LQpL],Nn);
-        % Spatial priors (QP)
-        %------------------------------------------------------------------
-        % h provides the final weights of the hyperparameters
-        Ne    = length(Qe);
-        Np    = length(Qp);
-        hp    = h(Ne + (1:Np));
-        qp    = sparse(0);
-        for i = 1:Np
-            if hp(i) > max(hp)/128
-                qp  = qp + hp(i)*Qp{i}.q*Qp{i}.q';
-            end
-        end
-        % Accumulate empirical priors (New set of patches for the second inversion)
-        %------------------------------------------------------------------
-        QP{end + 1}   = diag(qp);
-        LQP{end + 1}  = UL*qp;
-        LQPL{end + 1} = LQP{end}*UL';
-end
-
-switch(type)
-    case {'IID','MMN','EBB','EBBr'}
-        % or ReML - ARD (This is where the inference on h is carried out)
-        %------------------------------------------------------------------
-        [~,h,~,~] = spm_reml_sc(AYYA,[],[Qe LQpL],Nn,-4,16,Q0);
-        % Spatial priors (QP)
-        %------------------------------------------------------------------
-        % h provides the final weights of the hyperparameters
-        Ne    = length(Qe);
-        Np    = length(Qp);
-        
-        hp    = h(Ne + (1:Np));
-        qp    = sparse(0);
-        for i = 1:Np
-            qp = qp + hp(i)*Qp{i};
-        end
-        % Accumulate empirical priors (New set of patches for the second inversion)
-        %------------------------------------------------------------------
-        QP{end + 1}   = diag(qp);
-        LQP{end + 1}  = UL*qp;
-        LQPL{end + 1} = LQP{end}*UL';
-end
+[QP, LQP, LQPL] = run_inference(type, Qp, Ns, AY, UL, Qe, QP, LQP, LQPL, AYYA, LQpL, Nn, Q0);
 
 
 %==========================================================================
-% Step 2: Re-estimate
+% Step 2: Run the inference for the second time, having collapsed all
+% priors into one summed prior.
 %==========================================================================
 fprintf('Inverting subject 1\n')
 
@@ -311,13 +248,7 @@ fprintf('Inverting subject 1\n')
 Np    = length(LQPL);       % Final number of priors
 Ne    = length(Qe);         % Sensor noise prior
 
-
 Q     = [{Q0} LQPL]; %% sensor corvariance prior:  Qe is identity with unit trace, LQPL is in the units of data
-
-if rank(AYYA)~=size(A,1)
-    warning('AYYA IS RANK DEFICIENT');
-end
-
 
 [Cy,h,~,F]= spm_reml_sc(AYYA,[],Q,Nn,-4,16,Q0);
 
@@ -505,14 +436,13 @@ for j = 1:Ntrialtypes                          % pool over conditions
 end
 YY=YY./N;
 
-function [AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr)
+function [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr)
 % loop over Ntrialtypes trial types
 %----------------------------------------------------------------------
 UYYU = 0;
 AYYA=0;
 Nn    =0;                             % number of samples
 AY={};
-Ntrials=0;
 
 for j = 1:Ntrialtypes
     UY{j} = sparse(0);
@@ -536,7 +466,6 @@ for j = 1:Ntrialtypes
         %--------------------------------------------------------------
         Nn       = Nn + Nr;         % number of samples
         YY          = Y*Y';                  % and covariance
-        Ntrials=Ntrials+1;
         % accumulate statistics
         %--------------------------------------------------------------
         UY{j}     = UY{j} + Y;           % condition-specific ERP
@@ -690,3 +619,78 @@ end
 allsource = allsource/max(allsource);   % Normalise
 Qp{1} = diag(allsource);
 LQpL{1} = UL*diag(allsource)*UL';
+
+function [QP, LQP, LQPL] = accumulate_inference_results(QP, qp, LQP, UL, LQPL)
+QP{end + 1}   = diag(qp);
+LQP{end + 1}  = UL*qp;
+LQPL{end + 1} = LQP{end}*UL';
+
+function [QP, LQP, LQPL] = run_inference(type, Qp, Ns, AY, UL, Qe, QP, LQP, LQPL, AYYA, LQpL, Nn, Q0)
+switch(type)
+    case {'MSP','GS','EBBgs'}
+        % Greedy search over MSPs
+        %------------------------------------------------------------------
+        Np    = length(Qp);
+        Q     = zeros(Ns,Np); %% NB SETTING UP A NEW Q HERE
+        for i = 1:Np
+            Q(:,i) = Qp{i}.q;
+        end
+        Q = sparse(Q);
+        % Multivariate Bayes (Here is performed the inversion)
+        %------------------------------------------------------------------
+        MVB   = spm_mvb(AY,UL,[],Q,Qe,16); %% Qe is identity with unit trace
+        % Accumulate empirical priors (New set of patches for the second inversion)
+        %------------------------------------------------------------------
+        % MVB.cp provides the final weights of the hyperparameters
+        Qcp           = Q*MVB.cp;
+        QP{end + 1}   = sum(Qcp.*Q,2);
+        LQP{end + 1}  = (UL*Qcp)*Q';
+        LQPL{end + 1} = LQP{end}*UL';
+end
+
+switch(type)
+    case {'MSP','ARD'}
+        % ReML / ARD inversion
+        %------------------------------------------------------------------
+        [~,h,~,~] = spm_sp_reml(AYYA,[],[Qe LQpL],Nn);
+        % Spatial priors (QP)
+        %------------------------------------------------------------------
+        % h provides the final weights of the hyperparameters
+        Ne    = length(Qe);
+        Np    = length(Qp);
+        hp    = h(Ne + (1:Np));
+        qp    = sparse(0);
+        for i = 1:Np
+            if hp(i) > max(hp)/128
+                qp  = qp + hp(i)*Qp{i}.q*Qp{i}.q';
+            end
+        end
+        % Accumulate empirical priors (New set of patches for the second inversion)
+        %------------------------------------------------------------------
+        [QP, LQP, LQPL] = accumulate_inference_results(QP, qp, LQP, UL, LQPL);
+end
+
+switch(type)
+    case {'IID','MMN','EBB','EBBr'}
+        % or ReML - ARD (This is where the inference on h is carried out)
+        %------------------------------------------------------------------
+        [~,h,~,~] = spm_reml_sc(AYYA,[],[Qe LQpL],Nn,-4,16,Q0);
+        % Spatial priors (QP)
+        %------------------------------------------------------------------
+        % h provides the final weights of the hyperparameters
+        Ne    = length(Qe);
+        Np    = length(Qp);
+        hp    = h(Ne + (1:Np));
+        qp    = sparse(0);
+        for i = 1:Np
+            qp = qp + hp(i)*Qp{i};
+        end
+        % Accumulate empirical priors (New set of patches for the second inversion)
+        %------------------------------------------------------------------
+        [QP, LQP, LQPL] = accumulate_inference_results(QP, qp, LQP, UL, LQPL);
+end
+
+function check_data(AYYA, A)
+if rank(AYYA)~=size(A,1)
+    warning('AYYA IS RANK DEFICIENT');
+end
