@@ -77,6 +77,15 @@ Nl = length(D);
 if Nl>1
     error('function only defined for a single subject');
 end
+
+% Check modalities - this function only works for single modality
+%--------------------------------------------------------------------------
+modalities = D.inv{val}.forward.modality;
+if size(modalities,1)>1
+    error('not defined for multiple modalities');
+end
+
+
 %==========================================================================
 
 % D - SPM data structure
@@ -115,12 +124,6 @@ try complexind=inverse.complexind; catch, complexind=[]; end
 % Function inputs
 %==========================================================================
 
-% Check modalities - this function only works for single modality
-%--------------------------------------------------------------------------
-modalities = D.inv{val}.forward.modality;
-if size(modalities,1)>1
-    error('not defined for multiple modalities');
-end
 
 
 % check lead fields and get number of dipoles (Nd) and channels (Nc)
@@ -149,41 +152,21 @@ fprintf(' - done\n')
 %==========================================================================
 [A, UL, Is, Ns] = construct_spatial_projector(inverse, Nm, L, Nd);
 
-
 %==========================================================================
 % Time-window of interest (in milliseconds)
 %==========================================================================
 [w, It] = get_time_window_of_interest(woi, D);
 
-
+%==========================================================================
+% Construct temporal filter
+%==========================================================================
 if ~no_temporal_filter
-    
-    % Peristimulus time
-    %----------------------------------------------------------------------
-    pst    = 1000*D.time;                   % peristimulus time (ms)
-    pst    = pst(It);                       % windowed time (ms)
-    dur    = (pst(end) - pst(1))/1000;      % duration (s)
-    dct    = (It - It(1))/2/dur;            % DCT frequencies (Hz)
-    Nb     = length(It);                    % number of time bins
-    
-    % Serial correlations
-    %----------------------------------------------------------------------
-    K      = exp(-(pst - pst(1)).^2/(2*sdv^2)); %% sdv set to 4 by default
-    K      = toeplitz(K);
-    qV     = sparse(K*K'); %% Samples* samples covariance matrix- assumes smooth iid
-    
-    % Confounds and temporal subspace
-    %----------------------------------------------------------------------
-    
-    T      = spm_dctmtx(Nb,Nb);
-    j      = find( (dct >= lpf) & (dct <= hpf) ); % This is the wrong way round but leave for now for compatibility with spm_eeg_invert
-    T      = T(:,j);                    % Apply the filter to discrete cosines
-    dct    = dct(j);                    % Frequencies accepted
+    [pst, dct, Nb, qV, T] = construct_temporal_filter(D, It, sdv,lpf, hpf);
 else
     T=eye(length(It));
     qV=T;
     pst=0;dct=0;
-end % if no temp filter
+end 
 
 % Hanning window
 %----------------------------------------------------------------------
@@ -203,37 +186,11 @@ end
 %==========================================================================
 % Get temporal covariance (Y'*Y) to find temporal modes
 %==========================================================================
-YY=0;% instantiate value of temporal covariance
-N=0; % number of trials used in covariance calculation
+[YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A);
 
-badtrialind=D.badtrials;
-Ik=[]; %% keep a record of trials used
-for j = 1:Ntrialtypes                          % pool over conditions
-    c     = D.indtrial(trial{j});     % and trials
-    [~,ib]=intersect(c,badtrialind); % remove bad trials ib if there are any
-    c=c(setxor(1:length(c),ib));
-    Ik=[Ik c];
-    Nk    = length(c);
-    i=sqrt(-1);
-    for k = 1:Nk
-        if isempty(complexind)
-            data=D(Ic,It,c(k));
-        else
-            data=squeeze(D(Ic,complexind(1,:),c(k))+i.*D(Ic,complexind(2,:),c(k)));
-        end
-        Y     = A*data;
-        
-        YY    = YY + Y'*Y;
-        N     = N + 1;
-    end
-end
-YY=YY./N;
 %==========================================================================
-% Get temporal covariance (Y'*Y) to find temporal modes
-%==========================================================================
-
 % Apply any Hanning and filtering
-%------------------------------------------------------------------
+%==========================================================================
 YY         = W'*YY*W;     % Hanning
 YTY         = T'*YY*T;     % Filter
 
@@ -271,49 +228,7 @@ Vq     = S*pinv(S'*qV*S)*S';            % temporal precision
 
 % get spatial covariance (Y*Y') for Gaussian process model
 %======================================================================
-% loop over Ntrialtypes trial types
-%----------------------------------------------------------------------
-UYYU = 0;
-AYYA=0;
-Nn    =0;                             % number of samples
-AY={};
-Ntrials=0;
-
-for j = 1:Ntrialtypes
-    UY{j} = sparse(0);
-    c       = D.indtrial(trial{j});
-    [~,ib]=intersect(c,badtrialind); %% remove bad trials ib if there are any
-    c=c(setxor(1:length(c),ib));
-    Nk    = length(c);
-    % loop over epochs
-    %------------------------------------------------------------------
-    for k = 1:Nk
-        % stack (scaled aligned data) over modalities
-        %--------------------------------------------------------------
-        if isempty(complexind)
-            data=D(Ic,It,c(k));
-        else
-            data=D(Ic,complexind(1,:),c(k))+i.*D(Ic,complexind(2,:),c(k));
-        end
-        Y       = data*S; %% in temporal subspace
-        Y=A*Y; %%  in spatial subspace
-        % accumulate first & second-order responses
-        %--------------------------------------------------------------
-        Nn       = Nn + Nr;         % number of samples
-        YY          = Y*Y';                  % and covariance
-        Ntrials=Ntrials+1;
-        % accumulate statistics (subject-specific)
-        %--------------------------------------------------------------
-        UY{j}     = UY{j} + Y;           % condition-specific ERP
-        UYYU     = UYYU + YY;          % subject-specific covariance
-        % and pool for optimisation of spatial priors over subjects
-        %--------------------------------------------------------------
-        AY{end + 1} = Y;                     % pooled response for MVB
-        AYYA        = AYYA    + YY;          % pooled response for ReML
-    end
-end
-
-AY=spm_cat(AY); %% goes to MVB/GS algorithm
+[AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr);
 
 ID    = spm_data_id(AY); %% get a unique ID for these filtered data
 
@@ -677,3 +592,98 @@ catch
     trial = D.condlist;
 end
 Ntrialtypes=length(trial);
+
+function [YY, badtrialind, Ik, i, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A)
+YY=0;% instantiate value of temporal covariance
+N=0; % number of trials used in covariance calculation
+
+badtrialind=D.badtrials;
+Ik=[]; %% keep a record of trials used
+for j = 1:Ntrialtypes                          % pool over conditions
+    c     = D.indtrial(trial{j});     % and trials
+    [~,ib]=intersect(c,badtrialind); % remove bad trials ib if there are any
+    c=c(setxor(1:length(c),ib));
+    Ik=[Ik c];
+    Nk    = length(c);
+    i=sqrt(-1);
+    for k = 1:Nk
+        if isempty(complexind)
+            data=D(Ic,It,c(k));
+        else
+            data=squeeze(D(Ic,complexind(1,:),c(k))+i.*D(Ic,complexind(2,:),c(k)));
+        end
+        Y     = A*data;
+        
+        YY    = YY + Y'*Y;
+        N     = N + 1;
+    end
+end
+YY=YY./N;
+
+function [AYYA, Nn, AY, Ntrials, UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, i, Y, S, A, Nr)
+% loop over Ntrialtypes trial types
+%----------------------------------------------------------------------
+UYYU = 0;
+AYYA=0;
+Nn    =0;                             % number of samples
+AY={};
+Ntrials=0;
+
+for j = 1:Ntrialtypes
+    UY{j} = sparse(0);
+    c       = D.indtrial(trial{j});
+    [~,ib]=intersect(c,badtrialind); %% remove bad trials ib if there are any
+    c=c(setxor(1:length(c),ib));
+    Nk    = length(c);
+    % loop over epochs
+    %------------------------------------------------------------------
+    for k = 1:Nk
+        % stack (scaled aligned data) over modalities
+        %--------------------------------------------------------------
+        if isempty(complexind)
+            data=D(Ic,It,c(k));
+        else
+            data=D(Ic,complexind(1,:),c(k))+i.*D(Ic,complexind(2,:),c(k));
+        end
+        Y       = data*S; %% in temporal subspace
+        Y=A*Y; %%  in spatial subspace
+        % accumulate first & second-order responses
+        %--------------------------------------------------------------
+        Nn       = Nn + Nr;         % number of samples
+        YY          = Y*Y';                  % and covariance
+        Ntrials=Ntrials+1;
+        % accumulate statistics (subject-specific)
+        %--------------------------------------------------------------
+        UY{j}     = UY{j} + Y;           % condition-specific ERP
+        UYYU     = UYYU + YY;          % subject-specific covariance
+        % and pool for optimisation of spatial priors over subjects
+        %--------------------------------------------------------------
+        AY{end + 1} = Y;                     % pooled response for MVB
+        AYYA        = AYYA    + YY;          % pooled response for ReML
+    end
+end
+
+AY=spm_cat(AY); %% goes to MVB/GS algorithm
+
+function [pst, dct, Nb, qV, T] = construct_temporal_filter(D, It, sdv, lpf, hpf)
+% Peristimulus time
+%----------------------------------------------------------------------
+pst    = 1000*D.time;                   % peristimulus time (ms)
+pst    = pst(It);                       % windowed time (ms)
+dur    = (pst(end) - pst(1))/1000;      % duration (s)
+dct    = (It - It(1))/2/dur;            % DCT frequencies (Hz)
+Nb     = length(It);                    % number of time bins
+
+% Serial correlations
+%----------------------------------------------------------------------
+K      = exp(-(pst - pst(1)).^2/(2*sdv^2)); %% sdv set to 4 by default
+K      = toeplitz(K);
+qV     = sparse(K*K'); %% Samples* samples covariance matrix- assumes smooth iid
+
+% Confounds and temporal subspace
+%----------------------------------------------------------------------
+
+T      = spm_dctmtx(Nb,Nb);
+j      = find( (dct >= lpf) & (dct <= hpf) ); % This is the wrong way round but leave for now for compatibility with spm_eeg_invert
+T      = T(:,j);                    % Apply the filter to discrete cosines
+dct    = dct(j);                    % Frequencies accepted
