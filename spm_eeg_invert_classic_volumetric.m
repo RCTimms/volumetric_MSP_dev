@@ -153,18 +153,8 @@ fprintf(' - done\n')
 %==========================================================================
 % Time-window of interest (in milliseconds)
 %==========================================================================
-if isempty(woi)
-    w      = 1000*[min(D.time) max(D.time)];
-else
-    w=woi;
-end
-It     = (w/1000 - D.timeonset)*D.fsample + 1;
-It     = max(1,It(1)):min(It(end), length(D.time));
-It     = fix(It);
-disp(sprintf('Number of samples %d',length(It)))
-%==========================================================================
-% Time-window of interest
-%==========================================================================
+[w, It] = get_time_window_of_interest(woi, D);
+
 
 if ~no_temporal_filter
     
@@ -206,17 +196,9 @@ end
 
 
 %==========================================================================
-% Get trials or conditions
+% Get trials (a.k.a conditions)
 %==========================================================================
-try
-    trial = D.inv{D.val}.inverse.trials;
-catch
-    trial = D.condlist;
-end
-Ntrialtypes=length(trial);
-%==========================================================================
-% Get trials or conditions
-%==========================================================================
+[trial, Ntrialtypes] = get_trials(D);
 
 %==========================================================================
 % Get temporal covariance (Y'*Y) to find temporal modes
@@ -676,3 +658,22 @@ clear ss
 Is    = 1:Nd;               % Indices of active dipoles - all of them.
 Ns    = length(Is);         % Number of sources, Ns
 fprintf('Using %d spatial modes',Nm)
+
+function [w, It] = get_time_window_of_interest(woi, D)
+if isempty(woi)
+    w      = 1000*[min(D.time) max(D.time)];
+else
+    w=woi;
+end
+It     = (w/1000 - D.timeonset)*D.fsample + 1;
+It     = max(1,It(1)):min(It(end), length(D.time));
+It     = fix(It);
+disp(sprintf('Number of samples %d',length(It)))
+
+function [trial, Ntrialtypes] = get_trials(D)
+try
+    trial = D.inv{D.val}.inverse.trials;
+catch
+    trial = D.condlist;
+end
+Ntrialtypes=length(trial);
