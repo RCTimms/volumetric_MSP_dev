@@ -1,6 +1,6 @@
 function [D] = spm_eeg_invert_classic_volumetric(D,val)
 %% Volumetric multiple sparse priors
-% This version only handles single subject single modality data the removal
+% This version only handles single subject single modality data; the removal
 % of many scaling factors makes it easier to compare between forward models
 %
 % Note also that this funtion performs a bit differently from the
@@ -198,7 +198,7 @@ check_data(AYYA, A);
 %--------------------------------------------------------------------------
 AQeA   = A*QE*A';           % Note that here it is A*A'
 Qe{1}  = AQeA/(trace(AQeA)); % it means IID noise in virtual sensor space
-Q0          = Qe0*trace(AYYA)*Qe{1}./sum(Nn); %% fixed (min) level of sensor space variance
+Q0     = Qe0*trace(AYYA)*Qe{1}./sum(Nn); %% fixed (min) level of sensor space variance
 
 %==========================================================================
 % Create Source Priors
@@ -317,7 +317,8 @@ D.inv{val}.method  = 'Imaging';
 
 return
 
-function [A, UL, Is, Ns] = construct_apply_spatial_projector(inverse, Nm, L, Nd)
+function [A, UL, Is, Ns] = construct_apply_spatial_projector(inverse,...
+    Nm, L, Nd)
 % Carries out a PCA on the LL' (aka the Gram matrix) and reduces the lead
 % field matrix.
 %
@@ -396,8 +397,8 @@ fprintf('\nNumber of samples %d',length(It))
 function [trial, Ntrialtypes] = get_trials(D)
 % Get trial information and the number of trial types from the input data.
 %
-% This function extracts trial information and calculates the number of trial
-% types from the provided data struct (D).
+% This function extracts trial information and calculates the number of
+% trial types from the provided data struct (D).
 %
 % Input arguments:
 %   D - Input data struct containing trial-related information
@@ -413,7 +414,8 @@ catch
 end
 Ntrialtypes=length(trial);
 
-function [YY, badtrialind, Ik, Y] = get_temporal_covariance(D, Ntrialtypes, trial, complexind, Ic, It, A)
+function [YY, badtrialind, Ik, Y] = get_temporal_covariance(D,...
+    Ntrialtypes, trial, complexind, Ic, It, A)
 % Calculate the temporal covariance matrix and related values.
 %
 % This function calculates the temporal covariance matrix (YY) based on the
@@ -435,14 +437,14 @@ function [YY, badtrialind, Ik, Y] = get_temporal_covariance(D, Ntrialtypes, tria
 %   Y            - Projected data
 %
 
-YY=0;% instantiate value of temporal covariance
+YY=0; % instantiate value of temporal covariance
 N=0; % number of trials used in covariance calculation
-i=sqrt(-1); % imaginary number, for use with complex (e.g. frequency domain data)
+i=sqrt(-1); % imaginary number, for use with complex data
 badtrialind=D.badtrials;
 Ik=[]; %% keep a record of trials used
 for j = 1:Ntrialtypes                          % pool over conditions
     c     = D.indtrial(trial{j});     % and trials
-    [~,ib]=intersect(c,badtrialind); % remove bad trials ib if there are any
+    [~,ib]=intersect(c,badtrialind); % remove bad trials with the indices ib if there are any
     c=c(setxor(1:length(c),ib));
     Ik=[Ik c];
     Nk    = length(c);
@@ -460,11 +462,13 @@ for j = 1:Ntrialtypes                          % pool over conditions
 end
 YY=YY./N;
 
-function [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes, D, trial, badtrialind, complexind, Ic, It, Y, S, A, Nr)
+function [AYYA, Nn, AY,UY, Y] = get_spatial_covariance(Ntrialtypes,...
+    D, trial, badtrialind, complexind, Ic, It, Y, S, A, Nr)
 % Calculate spatial covariance matrices and related values.
 %
-% This function calculates spatial covariance matrices (AYYA, UYYU) and various
-% related values based on the provided input data struct (D) and parameters.
+% This function calculates spatial covariance matrices (AYYA, UYYU) and
+% various related values based on the provided input data struct (D) and
+% parameters.
 %
 % Input arguments:
 %   Ntrialtypes  - Number of trial types
@@ -534,7 +538,8 @@ end
 
 AY=spm_cat(AY); %% goes to MVB/GS algorithm
 
-function [pst, dct, Nb, qV, T] = construct_temporal_filter(D, It, sdv, lpf, hpf)
+function [pst, dct, Nb, qV, T] = construct_temporal_filter(D,...
+    It, sdv, lpf, hpf)
 % Construct temporal filter parameters.
 %
 % Input arguments:
